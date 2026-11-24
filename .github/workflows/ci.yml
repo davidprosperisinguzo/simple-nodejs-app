@@ -42,8 +42,7 @@ jobs:
 
       # Report critical dependency advisories without failing the pipeline.
       - name: Audit critical vulnerabilities
-        run: npm audit --audit-level=critical
-        continue-on-error: true
+        run: npm audit --audit-level=critical || echo "::warning::npm audit found critical vulnerabilities in this legacy app (known, report only)"
 
       # Build the container image used by the smoke test.
       - name: Build Docker image
