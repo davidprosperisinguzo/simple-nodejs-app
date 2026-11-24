@@ -1,0 +1,140 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the commit tested by CI
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Verify assumed AWS role
+        run: aws sts get-caller-identity
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push commit and latest image tags
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          image="${ECR_REGISTRY}/${ECR_REPOSITORY}"
+          docker build --tag "${image}:${IMAGE_TAG}" --tag "${image}:latest" .
+          docker push "${image}:${IMAGE_TAG}"
+          docker push "${image}:latest"
+
+      - name: Deploy image over SSH
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.event.workflow_run.head_sha || github.sha }}
+          APP_PORT: ${{ vars.APP_PORT }}
+        run: |
+          set -euo pipefail
+
+          key_file="$(mktemp)"
+          trap 'rm -f "$key_file"' EXIT
+          printf '%s\n' "$EC2_SSH_KEY" > "$key_file"
+          chmod 600 "$key_file"
+
+          printf -v remote_args '%q ' \
+            "$AWS_REGION" \
+            "$ECR_REGISTRY" \
+            "$ECR_REPOSITORY" \
+            "$IMAGE_TAG" \
+            "$APP_PORT"
+
+          ssh \
+            -i "$key_file" \
+            -o StrictHostKeyChecking=accept-new \
+            "${EC2_USER}@${EC2_HOST}" \
+            "bash -s -- ${remote_args}" <<'REMOTE'
+          set -euo pipefail
+          AWS_REGION="$1"
+          ECR_REGISTRY="$2"
+          ECR_REPOSITORY="$3"
+          IMAGE_TAG="$4"
+          APP_PORT="$5"
+
+          aws ecr get-login-password --region "$AWS_REGION" |
+            docker login --username AWS --password-stdin "$ECR_REGISTRY"
+
+          image="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          docker pull "$image"
+
+          if docker container inspect nodejs-app >/dev/null 2>&1; then
+            docker stop nodejs-app
+            docker rm nodejs-app
+          fi
+
+          docker run -d \
+            --name nodejs-app \
+            --restart unless-stopped \
+            -p "${APP_PORT}:3000" \
+            "$image"
+
+          docker image prune -f
+          REMOTE
+
+      - name: Verify deployed application
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          APP_PORT: ${{ vars.APP_PORT }}
+          IMAGE_TAG: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+        run: |
+          set -euo pipefail
+
+          url="http://${EC2_HOST}:${APP_PORT}"
+          response=''
+          for attempt in $(seq 1 60); do
+            response="$(curl --fail --silent "$url" 2>/dev/null || true)"
+            if [[ "$response" == *"Hello World"* ]]; then
+              printf '%s\n' "$response"
+              {
+                printf 'Deployed image: `%s/%s:%s`\n\n' "$ECR_REGISTRY" "$ECR_REPOSITORY" "$IMAGE_TAG"
+                printf 'Application URL: %s\n' "$url"
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          printf 'Deployment verification failed: %s did not return Hello World within 60 seconds.\n' "$url" >&2
+          exit 1
