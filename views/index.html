@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0a0e13">
+    <meta name="description" content="A Node.js app delivered to AWS by a GitHub Actions CI/CD pipeline.">
+    <title>Hello World — davidops pipeline</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/styles.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <main id="main" class="page-shell">
+      <header class="hero">
+        <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span> DAVIDOPS / DELIVERY SYSTEM</p>
+        <h1>Hello World, <span>from a CI/CD pipeline</span></h1>
+        <p class="hero-copy">A small app. A repeatable path from a git push to a running container.</p>
+
+        <section class="terminal" aria-label="Deployment pipeline terminal">
+          <div class="terminal-bar">
+            <span class="terminal-lights" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span>delivery.log</span>
+            <span class="terminal-state">LIVE FLOW</span>
+          </div>
+          <pre><code><span class="prompt">$</span> git push origin master
+<span class="terminal-label">CI</span>   npm ci
+     npm test
+     docker build
+     smoke test
+<span class="terminal-label">CD</span>   assume AWS role via OIDC
+     push image to Amazon ECR
+     deploy to EC2
+<span class="prompt">›</span>  delivery complete</code></pre>
+        </section>
+      </header>
+
+      <section class="content-section about" aria-labelledby="about-heading">
+        <div class="section-heading">
+          <p class="eyebrow">01 / CONTEXT</p>
+          <h2 id="about-heading">What this is</h2>
+        </div>
+        <p>This Node.js app is deployed automatically by GitHub Actions to AWS. It is part of a DevOps class assignment exploring a practical, repeatable path from source code to a running service.</p>
+      </section>
+
+      <section class="content-section" aria-labelledby="pipeline-heading">
+        <div class="section-heading">
+          <p class="eyebrow">02 / DELIVERY</p>
+          <h2 id="pipeline-heading">The pipeline</h2>
+        </div>
+        <ol class="pipeline-grid">
+          <li class="pipeline-card">
+            <span class="step-number">01</span>
+            <h3>Test</h3>
+            <p>Install dependencies and verify app behavior.</p>
+          </li>
+          <li class="pipeline-card">
+            <span class="step-number">02</span>
+            <h3>Build</h3>
+            <p>Package the app into a portable Docker image.</p>
+          </li>
+          <li class="pipeline-card">
+            <span class="step-number">03</span>
+            <h3>Push to ECR</h3>
+            <p>Publish the versioned image to Amazon ECR.</p>
+          </li>
+          <li class="pipeline-card">
+            <span class="step-number">04</span>
+            <h3>Deploy to EC2</h3>
+            <p>Pull and run the verified image on the server.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="content-section" aria-labelledby="stack-heading">
+        <div class="section-heading">
+          <p class="eyebrow">03 / TOOLKIT</p>
+          <h2 id="stack-heading">Stack</h2>
+        </div>
+        <ul class="stack-list" aria-label="Technology stack">
+          <li>Node.js</li>
+          <li>Express</li>
+          <li>Docker</li>
+          <li>GitHub Actions</li>
+          <li>OIDC</li>
+          <li>Amazon ECR</li>
+          <li>Amazon EC2</li>
+          <li>Terraform</li>
+        </ul>
+      </section>
+
+      <section class="runtime-panel" aria-labelledby="runtime-heading">
+        <div class="runtime-heading">
+          <div>
+            <p class="eyebrow">04 / PROCESS</p>
+            <h2 id="runtime-heading">Live runtime</h2>
+          </div>
+          <span class="runtime-badge"><span class="status-dot" aria-hidden="true"></span> REQUEST-TIME DATA</span>
+        </div>
+        <dl class="runtime-grid">
+          <div>
+            <dt>Container hostname</dt>
+            <dd>{{HOSTNAME}}</dd>
+          </div>
+          <div>
+            <dt>Node version</dt>
+            <dd>{{NODE_VERSION}}</dd>
+          </div>
+          <div>
+            <dt>Server started</dt>
+            <dd>{{SERVER_STARTED_AT}}</dd>
+          </div>
+          <div>
+            <dt>Process uptime</dt>
+            <dd>{{UPTIME}}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <footer class="site-footer">
+        <span class="footer-mark" aria-hidden="true">d/</span>
+        <p>David Prosper Isinguzo, Cloud DevOps Engineer</p>
+        <span class="footer-note">BUILT TO SHIP</span>
+      </footer>
+    </main>
+  </body>
+</html>
