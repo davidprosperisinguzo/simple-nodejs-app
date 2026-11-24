@@ -163,7 +163,7 @@ resource "aws_iam_role" "github_actions" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = "repo:davidprosperisinguzo/simple-nodejs-app:ref:refs/heads/master"
+          "token.actions.githubusercontent.com:sub" = "repo:davidprosperisinguzo@244671956/simple-nodejs-app@1468593227:ref:refs/heads/master"
         }
       }
     }]
