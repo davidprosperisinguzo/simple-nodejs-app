@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Check out the repository contents.
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      # Install the project Node.js version and cache npm downloads.
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      # Install the exact dependency tree from the lockfile.
+      - name: Install dependencies
+        run: npm ci
+
+      # Run the project's test suite.
+      - name: Run tests
+        run: npm test
+
+      # Report critical dependency advisories without failing the pipeline.
+      - name: Audit critical vulnerabilities
+        run: npm audit --audit-level=critical
+        continue-on-error: true
+
+      # Build the container image used by the smoke test.
+      - name: Build Docker image
+        run: docker build -t nodejs-cicd-app:ci .
+
+      # Start the app and retry its local HTTP endpoint for up to 30 seconds.
+      - name: Smoke test container
+        env:
+          CONTAINER_NAME: nodejs-cicd-app-ci-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+
+          if ! docker run --name "$CONTAINER_NAME" --detach --publish 3000:3000 nodejs-cicd-app:ci; then
+            docker logs "$CONTAINER_NAME" 2>/dev/null || true
+            exit 1
+          fi
+
+          for attempt in $(seq 1 30); do
+            response="$(curl --fail --silent http://localhost:3000 2>/dev/null || true)"
+            if [[ "$response" == *"Hello World"* ]]; then
+              printf '%s\n' "$response"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          printf '%s\n' 'Smoke test failed: localhost:3000 did not return Hello World within 30 seconds.' >&2
+          docker logs "$CONTAINER_NAME" || true
+          exit 1
+
+      # Always stop and remove the smoke-test container, including after failure.
+      - name: Clean up smoke-test container
+        if: always()
+        env:
+          CONTAINER_NAME: nodejs-cicd-app-ci-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
+          docker rm "$CONTAINER_NAME" >/dev/null 2>&1 || true
